@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pointwise 报表构建器</title>
+<link rel="stylesheet" href="/app/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">📊 Pointwise <span>报表构建器</span></div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="build">① 构建</button>
+    <button class="tab" data-tab="preview">② 预览</button>
+    <button class="tab" data-tab="lineage">③ 血缘</button>
+    <button class="tab" data-tab="version">④ 版本切换</button>
+    <button class="tab" data-tab="export">⑤ 导出审计</button>
+  </nav>
+  <div class="userbox">
+    <label>当前用户</label>
+    <select id="userSelect"></select>
+  </div>
+</header>
+
+<main>
+  <!-- ===================================================== 构建 -->
+  <section id="tab-build" class="panel active">
+    <div class="grid two">
+      <div class="card">
+        <h2>报表定义</h2>
+        <label class="field-label">报表 Key</label>
+        <input id="repKey" placeholder="例如 regional_revenue" />
+        <label class="field-label">标题</label>
+        <input id="repTitle" placeholder="例如 区域营收报表" />
+
+        <h3>指标（可多选，版本默认取当前 active）</h3>
+        <div id="metricList" class="pick-list"></div>
+
+        <h3>维度</h3>
+        <div id="dimList" class="pick-list"></div>
+
+        <h3>筛选</h3>
+        <div class="filter-row">
+          <select id="filterField"></select>
+          <select id="filterOp">
+            <option value="eq">= 等于</option><option value="ne">≠ 不等于</option>
+            <option value="gt">&gt; 大于</option><option value="gte">≥</option>
+            <option value="lt">&lt; 小于</option><option value="lte">≤</option>
+          </select>
+          <input id="filterValue" placeholder="值" />
+          <button class="btn small" id="addFilter">添加</button>
+        </div>
+        <ul id="filterChips" class="chips"></ul>
+
+        <h3>权限范围</h3>
+        <select id="scopeSelect"></select>
+
+        <div class="btn-row">
+          <button class="btn primary" id="btnPreviewAdhoc">临时预览</button>
+          <button class="btn primary" id="btnSave">保存报表（生成快照）</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>已保存报表</h2>
+        <table class="data-table" id="reportTable">
+          <thead><tr><th>Key</th><th>标题</th><th>Revision</th><th>健康度</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="hint">健康度：<b>ok</b> 无影响 · <b class="warn">impacted</b> 上游弃用 · <b class="bad">broken</b> 字段下线/权限撤销</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 预览 -->
+  <section id="tab-preview" class="panel">
+    <div class="card">
+      <h2>预览 <small>（与导出共用同一引擎与快照，校验和一致）</small></h2>
+      <div class="btn-row">
+        <select id="snapshotSelect"></select>
+        <button class="btn primary" id="btnPreviewSnapshot">预览选中快照</button>
+        <span id="previewBasis" class="basis-tag"></span>
+      </div>
+      <div id="previewWarnings" class="warnings"></div>
+      <div class="checksum-line">数据校验和 sha256：<code id="previewChecksum">—</code></div>
+      <div class="table-wrap">
+        <table class="data-table" id="previewTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 血缘 -->
+  <section id="tab-lineage" class="panel">
+    <div class="card">
+      <h2>来源血缘 <small>（快照内嵌的版本固定血缘）</small></h2>
+      <div id="lineageGraph" class="lineage"></div>
+    </div>
+  </section>
+
+  <!-- ===================================================== 版本 -->
+  <section id="tab-version" class="panel">
+    <div class="card">
+      <h2>影响分析与版本切换</h2>
+      <button class="btn" id="btnImpact">重新扫描影响</button>
+      <div id="impactBox" class="impact"></div>
+      <h3>切换指标版本（乐观锁：基于当前 revision）</h3>
+      <div class="filter-row">
+        <select id="switchMetric"></select>
+        <select id="switchVersion"></select>
+        <button class="btn primary" id="btnSwitch">切换并生成新快照</button>
+      </div>
+      <h3>切换权限范围</h3>
+      <div class="filter-row">
+        <select id="switchScope"></select>
+        <button class="btn primary" id="btnSwitchScope">切换范围</button>
+      </div>
+      <h3>快照历史（不可变）</h3>
+      <table class="data-table" id="snapshotTable">
+        <thead><tr><th>#</th><th>Revision</th><th>创建人</th><th>时间</th><th>固定指标版本</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================================================== 导出 -->
+  <section id="tab-export" class="panel">
+    <div class="card">
+      <h2>导出与审计</h2>
+      <div class="btn-row">
+        <button class="btn primary" id="btnExport">按当前快照导出 CSV（冻结结果）</button>
+        <button class="btn" id="btnRefreshExports">刷新导出记录</button>
+        <button class="btn" id="btnRefreshAudit">刷新审计日志</button>
+      </div>
+      <table class="data-table" id="exportTable">
+        <thead><tr><th>ID</th><th>快照</th><th>行</th><th>校验和</th><th>申请人</th><th>时间</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h3>审计日志</h3>
+      <div class="table-wrap tall">
+        <table class="data-table" id="auditTable">
+          <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>结果</th><th>详情</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="/app/app.js"></script>
+</body>
+</html>
